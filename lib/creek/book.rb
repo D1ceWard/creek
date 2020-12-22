@@ -1,15 +1,14 @@
 require 'zip/filesystem'
 require 'nokogiri'
 require 'date'
-require 'httparty'
+require 'open-uri'
 
 module Creek
-
   class Creek::Book
-
     attr_reader :files,
                 :sheets,
-                :shared_strings
+                :shared_strings,
+                :with_headers
 
     DATE_1900 = Date.new(1899, 12, 30).freeze
     DATE_1904 = Date.new(1904, 1, 1).freeze
@@ -23,16 +22,11 @@ module Creek
           extension = File.extname(options[:original_filename] || path).downcase
           raise 'Not a valid file format.' unless (['.xlsx', '.xlsm'].include? extension)
         end
-        if options[:remote]
-          zipfile = Tempfile.new("file")
-          zipfile.binmode
-          zipfile.write(HTTParty.get(path).body)
-          zipfile.close
-          path = zipfile.path
-        end
+        path = download_file(path) if options[:remote]
         @files = Zip::File.open(path)
       end
       @shared_strings = SharedStrings.new(self)
+      @with_headers = options.fetch(:with_headers, false)
     end
 
     def sheets
@@ -51,7 +45,17 @@ module Creek
       rels = Nokogiri::XML::Document.parse(rels_doc).css("Relationship")
       @sheets = xml.css(cssPrefix+'sheet').map do |sheet|
         sheetfile = rels.find { |el| sheet.attr("r:id") == el.attr("Id") }.attr("Target")
-        Sheet.new(self, sheet.attr("name"), sheet.attr("sheetid"),  sheet.attr("state"), sheet.attr("visible"), sheet.attr("r:id"), sheetfile)
+        sheet = Sheet.new(
+          self,
+          sheet.attr("name"),
+          sheet.attr("sheetid"),
+          sheet.attr("state"),
+          sheet.attr("visible"),
+          sheet.attr("r:id"),
+          sheetfile
+        )
+        sheet.with_headers = with_headers
+        sheet
       end
     end
 
@@ -81,6 +85,21 @@ module Creek
         end
 
         result
+      end
+    end
+
+    private
+
+    def download_file(url)
+      # OpenUri will return a StringIO if under OpenURI::Buffer::StringMax
+      # threshold, and a Tempfile if over.
+      downloaded = URI(url).open
+      if downloaded.is_a? StringIO
+        path = Tempfile.new(['creek-file', '.xlsx']).path
+        File.binwrite(path, downloaded.read)
+        path
+      else
+        downloaded.path
       end
     end
   end

@@ -4,6 +4,10 @@ module Creek
   class Styles
     class Converter
       include Creek::Styles::Constants
+
+      # Excel non-printable character escape sequence
+      HEX_ESCAPE_REGEXP = /_x[0-9A-Fa-f]{4}_/
+
       ##
       # The heart of typecasting. The ruby type is determined either explicitly
       # from the cell xml or implicitly from the cell style, and this
@@ -45,57 +49,90 @@ module Creek
         when 'b'
           value.to_i == 1
         when 'str'
-          value
+          unescape_string(value)
         when 'inlineStr'
-          value
+          unescape_string(value)
 
         ##
         # Type can also be determined by a style,
         # detected earlier and cast here by its standardized symbol
         ##
 
-        when :string, :unsupported
+        when :string
           value
+        when :unsupported
+          convert_unknown(value)
         when :fixnum
           value.to_i
         when :float, :percentage
           value.to_f
-        when :date, :time, :date_time
+        when :date
           convert_date(value, options)
+        when :time, :date_time
+          convert_datetime(value, options)
         when :bignum
           convert_bignum(value)
 
         ## Nothing matched
         else
-          value
+          convert_unknown(value)
+        end
+      end
+      
+      def self.convert_unknown(value)
+        begin
+          if value.nil? or value.empty?
+            return value
+          elsif value.to_i.to_s == value.to_s
+            return value.to_i
+          elsif value.to_f.to_s == value.to_s
+            return value.to_f
+          else
+            return value
+          end
+        rescue
+          return value
         end
       end
 
-      # the trickiest. note that  all these formats can vary on
-      # whether they actually contain a date, time, or datetime.
       def self.convert_date(value, options)
-        value                        = value.to_f
-        days_since_date_system_start = value.to_i
-        fraction_of_24               = value - days_since_date_system_start
+        date = base_date(options) + value.to_i
+        yyyy, mm, dd = date.strftime('%Y-%m-%d').split('-')
 
-        # http://stackoverflow.com/questions/10559767/how-to-convert-ms-excel-date-from-float-to-date-format-in-ruby
-        date = options.fetch(:base_date, Date.new(1899, 12, 30)) + days_since_date_system_start
+        ::Date.new(yyyy.to_i, mm.to_i, dd.to_i)
+      end
 
-        if fraction_of_24 > 0 # there is a time associated
-          seconds = (fraction_of_24 * 86400).round
-          return Time.utc(date.year, date.month, date.day) + seconds
-        else
-          return date
-        end
+      def self.convert_datetime(value, options)
+        date = base_date(options) + value.to_f.round(6)
+
+        round_datetime(date.strftime('%Y-%m-%d %H:%M:%S.%N'))
       end
 
       def self.convert_bignum(value)
         if defined?(BigDecimal)
-          BigDecimal.new(value)
+          BigDecimal(value)
         else
           value.to_f
         end
       end
+
+      def self.unescape_string(value)
+        # excel encodes some non-printable characters using a hex code in the format _xHHHH_
+        # e.g. Carriage Return (\r) is encoded as _x000D_
+        value.gsub(HEX_ESCAPE_REGEXP) { |match| match[2, 4].to_i(16).chr(Encoding::UTF_8) }
+      end
+
+      private
+
+        def self.base_date(options)
+          options.fetch(:base_date, Date.new(1899, 12, 30))
+        end
+
+        def self.round_datetime(datetime_string)
+          /(?<yyyy>\d+)-(?<mm>\d+)-(?<dd>\d+) (?<hh>\d+):(?<mi>\d+):(?<ss>\d+.\d+)/ =~ datetime_string
+
+          ::Time.new(yyyy.to_i, mm.to_i, dd.to_i, hh.to_i, mi.to_i, ss.to_r).round(0)
+        end
     end
   end
 end

@@ -1,3 +1,6 @@
+[![version](https://badge.fury.io/rb/creek.svg)](https://badge.fury.io/rb/creek)
+[![downloads](https://ruby-gem-downloads-badge.herokuapp.com/creek?type=total&total_label=downloads)](https://ruby-gem-downloads-badge.herokuapp.com/creek?type=total&total_label=downloads)
+
 # Creek - Stream parser for large Excel (xlsx and xlsm) files.
 
 Creek is a Ruby gem that provides a fast, simple and efficient method of parsing large Excel (xlsx and xlsm) files.
@@ -26,11 +29,19 @@ creek = Creek::Book.new 'spec/fixtures/sample.xlsx'
 sheet = creek.sheets[0]
 
 sheet.rows.each do |row|
-  puts row # => {"A1"=>"Content 1", "B1"=>nil, C1"=>nil, "D1"=>"Content 3"}
+  puts row # => {"A1"=>"Content 1", "B1"=>nil, "C1"=>nil, "D1"=>"Content 3"}
+end
+
+sheet.simple_rows.each do |row|
+  puts row # => {"A"=>"Content 1", "B"=>nil, "C"=>nil, "D"=>"Content 3"}
 end
 
 sheet.rows_with_meta_data.each do |row|
-  puts row # => {"collapsed"=>"false", "customFormat"=>"false", "customHeight"=>"true", "hidden"=>"false", "ht"=>"12.1", "outlineLevel"=>"0", "r"=>"1", "cells"=>{"A1"=>"Content 1", "B1"=>nil, C1"=>nil, "D1"=>"Content 3"}}
+  puts row # => {"collapsed"=>"false", "customFormat"=>"false", "customHeight"=>"true", "hidden"=>"false", "ht"=>"12.1", "outlineLevel"=>"0", "r"=>"1", "cells"=>{"A1"=>"Content 1", "B1"=>nil, "C1"=>nil, "D1"=>"Content 3"}}
+end
+
+sheet.simple_rows_with_meta_data.each do |row|
+  puts row # => {"collapsed"=>"false", "customFormat"=>"false", "customHeight"=>"true", "hidden"=>"false", "ht"=>"12.1", "outlineLevel"=>"0", "r"=>"1", "cells"=>{"A"=>"Content 1", "B"=>nil, "C"=>nil, "D"=>"Content 3"}}
 end
 
 sheet.state   # => 'visible'
@@ -89,6 +100,14 @@ remote_url = 'http://dev-builds.libreoffice.org/tmp/test.xlsx'
 Creek::Book.new remote_url, remote: true
 ```
 
+## Mapping cells with header names
+By default, Creek will map cell names with letter and number(A1, B3 and etc). To be able to get cell values by header column name use ***with_headers*** (can be used only with ***#simple_rows*** method!!!) during creation *(Note: header column is first string of sheet)*
+
+```ruby
+creek = Creek::Book.new file.path, with_headers: true
+```
+
+
 ## Contributing
 
 Contributions are welcomed. You can fork a repository, add your code changes to the forked branch, ensure all existing unit tests pass, create new unit tests which cover your new changes and finally create a pull request.
@@ -105,6 +124,12 @@ Once this is complete, you should be able to run the test suite:
 
 ```
 rake
+```
+
+There are some remote tests that are excluded by default. To run those, run
+
+```
+bundle exec rspec --tag remote
 ```
 
 ## Bug Reporting
