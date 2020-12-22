@@ -26,6 +26,6 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'pry-byebug'
 
   spec.add_dependency 'nokogiri', '>= 1.10.0'
-  spec.add_dependency 'rubyzip', '>= 1.0.0'
+  spec.add_dependency 'rubyzip', '>= 1.2.2'
   spec.add_dependency 'httparty', '>= 0.15.0'
 end
